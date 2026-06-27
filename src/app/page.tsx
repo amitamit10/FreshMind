@@ -18,6 +18,7 @@ import {
 
 import {
   addFoodItem,
+  addRecipeMissingItems,
   addShoppingItem,
   toggleFoodStatus,
   toggleShoppingItem,
@@ -262,140 +263,129 @@ export default async function HomePage() {
   ];
 
   return (
-    <main className="page-shell">
-      <section className="hero">
+    <main className="page-shell app-page">
+      <section className="app-hero" id="home">
         <div className="hero-copy">
-          <span className="eyebrow">FreshMind · Firebase slice</span>
-          <h1>The mockups are wired to a real fridge and shopping flow.</h1>
+          <span className="eyebrow">FreshMind · Live Firebase app</span>
+          <h1>Save food before it becomes waste.</h1>
           <p>
-            This pass keeps the visual shell, but the Home, Fridge, and Shopping screens now
-            share live Firestore data when Firebase is configured. Without env vars, the app falls back to
-            demo data so the product loop stays visible.
+            Track what is at home, rescue expiring food with recipe suggestions, and keep a shared
+            shopping list synced through Firestore.
           </p>
         </div>
-        <div className="hero-pills">
-          <span>Vercel Hobby</span>
-          <span>Firebase</span>
-          <span>Groq</span>
-          <span>Pexels</span>
-          <span>{data.mode === "live" ? "Live data" : data.mode === "demo" ? "Demo data" : "Setup needed"}</span>
+        <div className="hero-card app-hero-card">
+          <span className="card-tag tone-tomato">{stats.urgentCount} urgent items</span>
+          <h3>{rescue.title}</h3>
+          <p>{rescue.subtitle}</p>
+          <div className="hero-meta">
+            <span>
+              <ChefHat size={14} />
+              {rescue.time}
+            </span>
+            <span>
+              <ShoppingCart size={14} />
+              {incompleteShopping.length} to buy
+            </span>
+          </div>
         </div>
-        <section className={data.mode === "error" ? "system-banner error" : "system-banner"}>
-          <Database size={16} />
-          <span>{data.message}</span>
-        </section>
       </section>
 
-      <section className="screen-grid">
-        <PhoneFrame eyebrow="01 · Home" title={data.householdName}>
-          <div className="screen-body">
-            <header className="screen-header">
-              <div>
-                <span className="screen-kicker">Household overview</span>
-                <h2>Good evening, Amit</h2>
-              </div>
-              <button className="icon-chip" aria-label="Alerts">
-                <BellRing size={16} />
-              </button>
-            </header>
+      <nav className="app-nav" aria-label="FreshMind sections">
+        <a href="#home">
+          <Home size={16} />
+          Home
+        </a>
+        <a href="#fridge">
+          <Refrigerator size={16} />
+          Fridge
+        </a>
+        <a href="#scan">
+          <Camera size={16} />
+          Scan
+        </a>
+        <a href="#recipes">
+          <ChefHat size={16} />
+          Recipes
+        </a>
+        <a href="#shopping">
+          <ShoppingCart size={16} />
+          Shopping
+        </a>
+      </nav>
 
-            <section className="hero-card">
-              <div>
-                <span className="card-tag tone-tomato">{stats.urgentCount} items urgent</span>
-                <h3>{rescue.title}</h3>
-                <p>{rescue.subtitle}</p>
-              </div>
-              <div className="hero-meta">
-                <span>
-                  <ChefHat size={14} />
-                  {rescue.time}
-                </span>
-                <span>
-                  <ShoppingCart size={14} />
-                  {rescue.missing.length} missing
-                </span>
-              </div>
-            </section>
+      <section className={data.mode === "error" ? "system-banner error" : "system-banner"}>
+        <Database size={16} />
+        <span>{data.message}</span>
+      </section>
 
-            <div className="stat-row">
-              <StatCard label="Waste score" value={`${stats.score}/100`} tone="sage" />
-              <StatCard label="Saved estimate" value={`₪${stats.savedEstimate}`} tone="butter" />
-              <StatCard label="Need rescue" value={`${stats.urgentCount} items`} tone="tomato" />
-            </div>
-
-            <section className="panel">
-              <div className="panel-heading">
-                <h3>Expiring soon</h3>
-                <button className="text-action">Synced view</button>
-              </div>
-              <div className="stack">
-                {activeItems.slice(0, 3).map((item) => (
-                  <ProductRow key={item.id} item={item} compact />
-                ))}
-                {activeItems.length === 0 ? (
-                  <div className="empty-card">
-                    <strong>No items yet</strong>
-                    <p>Add your first fridge items below and they will show up here.</p>
-                  </div>
-                ) : null}
-              </div>
-            </section>
-
-            <section className="mini-banner">
-              <div>
-                <strong>Shopping nudge</strong>
-                <p>
-                  {incompleteShopping.length > 0
-                    ? `${incompleteShopping.length} items are still missing for the next meal.`
-                    : "Your shopping list is clear for now."}
-                </p>
-              </div>
-              <button className="primary-pill">
-                <Plus size={16} />
-                Review list
-              </button>
-            </section>
+      <section className="app-grid">
+        <section className="app-main">
+          <div className="stat-row">
+            <StatCard label="Waste score" value={`${stats.score}/100`} tone="sage" />
+            <StatCard label="Saved estimate" value={`₪${stats.savedEstimate}`} tone="butter" />
+            <StatCard label="Need rescue" value={`${stats.urgentCount} items`} tone="tomato" />
           </div>
-          <BottomNav />
-        </PhoneFrame>
 
-        <PhoneFrame eyebrow="02 · Fridge" title="Searchable shared inventory">
-          <div className="screen-body">
-            <header className="screen-header">
+          <section className="panel app-section" id="fridge">
+            <div className="panel-heading">
               <div>
                 <span className="screen-kicker">Shared fridge</span>
-                <h2>What’s at home</h2>
+                <h2>What is at home</h2>
               </div>
-              <button className="icon-chip" aria-label="Filters">
-                <Settings2 size={16} />
-              </button>
-            </header>
+              <span className="count-pill">{activeItems.length} active</span>
+            </div>
 
             <label className="searchbar">
               <Search size={16} />
-              <input value="Search food, brand, or date" readOnly />
+              <input value="Search and filters are next; items are sorted by expiry now" readOnly />
             </label>
 
             <div className="chip-row">
               <span className="filter-chip active">All</span>
-              <span className="filter-chip">Urgent</span>
+              <span className="filter-chip">Urgent {stats.urgentCount}</span>
               <span className="filter-chip">Fridge</span>
               <span className="filter-chip">Produce</span>
             </div>
 
-            <section className="panel">
-              <div className="panel-heading">
-                <h3>Add to fridge</h3>
-                <button className="text-action">Manual add</button>
+            <div className="stack app-list">
+              {activeItems.map((item) => (
+                <ProductRow key={item.id} item={item} />
+              ))}
+              {activeItems.length === 0 ? (
+                <div className="empty-card">
+                  <strong>Your fridge is empty</strong>
+                  <p>Add your first item manually or confirm the scan result below.</p>
+                </div>
+              ) : null}
+            </div>
+          </section>
+
+          <section className="panel app-section" id="scan">
+            <div className="panel-heading">
+              <div>
+                <span className="screen-kicker">Smart scan</span>
+                <h2>Confirm detected food</h2>
+              </div>
+              <span className="confidence-pill">Demo detection</span>
+            </div>
+
+            <div className="scan-workflow">
+              <div className="scan-photo">
+                <div className="scan-tag">AI preview</div>
+                <div className="scan-packaging">
+                  <span>Detected from photo</span>
+                  <strong>Greek Yogurt</strong>
+                  <em>Expires 2026-06-29 · 91% confidence</em>
+                </div>
               </div>
               <form action={addFoodItem} className="mini-form">
-                <input name="name" placeholder="Milk, tomatoes, yogurt..." required />
+                <input name="name" defaultValue="Greek Yogurt" required />
                 <div className="mini-form-grid">
-                  <input name="quantityLabel" placeholder="1 tub" />
-                  <input name="expiryDate" type="date" />
+                  <input name="quantityLabel" defaultValue="1 tub" />
+                  <input name="expiryDate" type="date" defaultValue="2026-06-29" />
                 </div>
                 <div className="mini-form-grid">
-                  <input name="category" placeholder="Dairy" />
+                  <input name="category" defaultValue="Dairy" />
                   <select name="storageLocation" defaultValue="fridge">
                     <option value="fridge">Fridge</option>
                     <option value="freezer">Freezer</option>
@@ -406,175 +396,121 @@ export default async function HomePage() {
                 </div>
                 <button className="primary-pill full-width" type="submit">
                   <Plus size={16} />
-                  Save item
+                  Confirm and save
                 </button>
               </form>
-            </section>
+            </div>
+          </section>
 
-            <section className="panel">
-              <div className="panel-heading">
-                <h3>This week</h3>
-                <button className="text-action">Grouped view</button>
-              </div>
-              <div className="stack">
-                {activeItems.map((item) => (
-                  <ProductRow key={item.id} item={item} />
-                ))}
-                {activeItems.length === 0 ? (
-                  <div className="empty-card">
-                    <strong>Your fridge is empty</strong>
-                    <p>The first saved item will appear here with expiry priority and actions.</p>
-                  </div>
-                ) : null}
-              </div>
-            </section>
-          </div>
-          <BottomNav />
-        </PhoneFrame>
-
-        <PhoneFrame eyebrow="03 · Scan" title="Ready for web image search">
-          <div className="screen-body">
-            <header className="screen-header">
+          <section className="panel app-section" id="recipes">
+            <div className="panel-heading">
               <div>
-                <span className="screen-kicker">Smart scan</span>
-                <h2>Add a product</h2>
+                <span className="screen-kicker">Recipe rescue</span>
+                <h2>Cook with what expires first</h2>
               </div>
-              <button className="icon-chip" aria-label="Upload">
-                <Upload size={16} />
-              </button>
-            </header>
-
-            <section className="scan-preview">
-              <div className="scan-photo">
-                <div className="scan-tag">Storage-ready</div>
-                <div className="scan-packaging">
-                  <span>Next step</span>
-                  <strong>Photo upload</strong>
-                  <em>Use photo detection, then discard uploads</em>
-                </div>
-              </div>
-              <div className="scan-actions">
-                <button className="secondary-pill">
-                  <Camera size={16} />
-                  Camera
-                </button>
-                <button className="secondary-pill">
-                  <Upload size={16} />
-                  Upload
-                </button>
-              </div>
-            </section>
-
-            <section className="panel">
-              <div className="panel-heading">
-                <h3>Implementation note</h3>
-                <span className="confidence-pill">Coming next</span>
-              </div>
-              <div className="notes-stack">
-                <p>1. Process image input only for detection.</p>
-                <p>2. Save confirmed food fields in Firestore.</p>
-                <p>3. Use free web image search for recipe pictures.</p>
-              </div>
-            </section>
-          </div>
-          <BottomNav />
-        </PhoneFrame>
-
-        <PhoneFrame eyebrow="04 · Recipes" title="Rule-based rescue meals">
-          <div className="screen-body">
-            <header className="screen-header">
-              <div>
-                <span className="screen-kicker">Recipe engine v0</span>
-                <h2>Cook with what we have</h2>
-              </div>
-              <button className="icon-chip" aria-label="Chef">
-                <ChefHat size={16} />
-              </button>
-            </header>
-
-            <div className="chip-row">
-              <span className="filter-chip active">Best Match</span>
-              <span className="filter-chip">Almost Ready</span>
-              <span className="filter-chip">Save First</span>
+              <span className="confidence-pill">Rule-based v0</span>
             </div>
 
-            <div className="stack">
+            <div className="recipe-grid">
               {recipeCards.map((card) => (
-                <RecipeCard key={card.title} {...card} />
+                <div key={card.title} className="recipe-action-card">
+                  <RecipeCard {...card} />
+                  <form action={addRecipeMissingItems}>
+                    <input type="hidden" name="recipe" value={card.title} />
+                    {card.missing.map((item) => (
+                      <input key={item} type="hidden" name="item" value={item} />
+                    ))}
+                    <button className="secondary-pill full-width" type="submit">
+                      <Sparkles size={16} />
+                      Add missing items
+                    </button>
+                  </form>
+                </div>
               ))}
             </div>
-          </div>
-          <BottomNav />
-        </PhoneFrame>
+          </section>
+        </section>
 
-        <PhoneFrame eyebrow="05 · Shopping" title="From recipe to cart">
-          <div className="screen-body">
-            <header className="screen-header">
+        <aside className="app-sidebar">
+          <section className="panel app-section">
+            <div className="panel-heading">
+              <div>
+                <span className="screen-kicker">Manual add</span>
+                <h2>Add food</h2>
+              </div>
+            </div>
+            <form action={addFoodItem} className="mini-form">
+              <input name="name" placeholder="Milk, tomatoes, yogurt..." required />
+              <div className="mini-form-grid">
+                <input name="quantityLabel" placeholder="1 tub" />
+                <input name="expiryDate" type="date" />
+              </div>
+              <div className="mini-form-grid">
+                <input name="category" placeholder="Dairy" />
+                <select name="storageLocation" defaultValue="fridge">
+                  <option value="fridge">Fridge</option>
+                  <option value="freezer">Freezer</option>
+                  <option value="pantry">Pantry</option>
+                  <option value="cabinet">Cabinet</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <button className="primary-pill full-width" type="submit">
+                <Plus size={16} />
+                Save item
+              </button>
+            </form>
+          </section>
+
+          <section className="panel app-section" id="shopping">
+            <div className="panel-heading">
               <div>
                 <span className="screen-kicker">Shared list</span>
-                <h2>Shopping tonight</h2>
+                <h2>Shopping</h2>
               </div>
-              <button className="icon-chip" aria-label="Receipts">
-                <ReceiptText size={16} />
+              <span className="count-pill">{shoppingItems.length} items</span>
+            </div>
+
+            <form action={addShoppingItem} className="mini-form">
+              <input name="name" placeholder="Garlic, pasta, olive oil..." required />
+              <input name="note" placeholder="Why this item is needed" />
+              <button className="primary-pill full-width" type="submit">
+                <Plus size={16} />
+                Add to list
               </button>
-            </header>
+            </form>
 
-            <section className="mini-banner tone-sage banner-tight">
-              <div>
-                <strong>AI suggestion</strong>
-                <p>Add pantry basics that complete the top rescue meal.</p>
-              </div>
-              <button className="primary-pill">
-                <Sparkles size={16} />
-                Use recipe picks
-              </button>
-            </section>
-
-            <section className="panel">
-              <div className="panel-heading">
-                <h3>Add to list</h3>
-                <button className="text-action">Shared add</button>
-              </div>
-              <form action={addShoppingItem} className="mini-form">
-                <input name="name" placeholder="Garlic, pasta, olive oil..." required />
-                <input name="note" placeholder="Why this item is needed" />
-                <button className="primary-pill full-width" type="submit">
-                  <Plus size={16} />
-                  Save shopping item
-                </button>
-              </form>
-            </section>
-
-            <section className="panel">
-              <div className="panel-heading">
-                <h3>To buy</h3>
-                <span className="count-pill">{shoppingItems.length} items</span>
-              </div>
-              <div className="shopping-stack">
-                {shoppingItems.map((item) => (
-                  <form key={item.id} action={toggleShoppingItem} className={item.completed ? "shopping-row done" : "shopping-row"}>
-                    <input type="hidden" name="id" value={item.id} />
-                    <input type="hidden" name="completed" value={String(item.completed)} />
-                    <button className="checkmark" aria-label={item.completed ? "Mark incomplete" : "Mark complete"} type="submit">
-                      {item.completed ? "✓" : ""}
-                    </button>
-                    <div>
-                      <strong>{item.name}</strong>
-                      <p>{item.note}</p>
-                    </div>
-                  </form>
-                ))}
-                {shoppingItems.length === 0 ? (
-                  <div className="empty-card">
-                    <strong>Shopping list is clear</strong>
-                    <p>Add a missing ingredient and it will show up here instantly.</p>
+            <div className="shopping-stack app-list">
+              {shoppingItems.map((item) => (
+                <form
+                  key={item.id}
+                  action={toggleShoppingItem}
+                  className={item.completed ? "shopping-row done" : "shopping-row"}
+                >
+                  <input type="hidden" name="id" value={item.id} />
+                  <input type="hidden" name="completed" value={String(item.completed)} />
+                  <button
+                    className="checkmark"
+                    aria-label={item.completed ? "Mark incomplete" : "Mark complete"}
+                    type="submit"
+                  >
+                    {item.completed ? "✓" : ""}
+                  </button>
+                  <div>
+                    <strong>{item.name}</strong>
+                    <p>{item.note}</p>
                   </div>
-                ) : null}
-              </div>
-            </section>
-          </div>
-          <BottomNav />
-        </PhoneFrame>
+                </form>
+              ))}
+              {shoppingItems.length === 0 ? (
+                <div className="empty-card">
+                  <strong>Shopping list is clear</strong>
+                  <p>Add a missing ingredient or use a recipe suggestion.</p>
+                </div>
+              ) : null}
+            </div>
+          </section>
+        </aside>
       </section>
     </main>
   );

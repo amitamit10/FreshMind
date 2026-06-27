@@ -55,6 +55,25 @@ export async function addShoppingItem(formData: FormData) {
   revalidatePath("/");
 }
 
+export async function addRecipeMissingItems(formData: FormData) {
+  const items = formData
+    .getAll("item")
+    .map((item) => String(item).trim())
+    .filter(Boolean);
+  const recipe = String(formData.get("recipe") ?? "Recipe").trim() || "Recipe";
+
+  await Promise.all(
+    items.map((name) =>
+      addFirebaseShoppingItem({
+        name,
+        note: `Needed for ${recipe}`,
+      }),
+    ),
+  );
+
+  revalidatePath("/");
+}
+
 export async function toggleShoppingItem(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const completed = String(formData.get("completed") ?? "false") === "true";
