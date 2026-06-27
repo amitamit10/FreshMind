@@ -1134,17 +1134,21 @@ It is a simple default for deploying a Next.js app for free.
 
 ## Backend
 
-* Supabase Free tier
+* Firebase Spark plan
 
-Use Supabase for:
+Use Firebase for:
 
 * Authentication
-* Database
-* Storage for uploaded product images
+* Firestore database
+* Prototype security rules for user-scoped data
 
 Reason:
 
-It gives the app a real backend without forcing a paid plan at the start.
+It gives the app a real backend without forcing a paid plan at the start, and it avoids the Supabase free-project limit.
+
+Important note:
+
+V1 should not store uploaded food photos. Scan images should be processed for detection and discarded; recipe imagery should come from web image search.
 
 ---
 
@@ -1193,6 +1197,6 @@ Recipe images should come from Pexels search, not AI image generation.
 The free-first stack is:
 
 * Vercel Hobby
-* Supabase Free tier
+* Firebase Spark plan
 * Groq Free plan
 * Pexels API

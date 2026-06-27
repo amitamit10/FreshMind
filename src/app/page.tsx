@@ -265,17 +265,17 @@ export default async function HomePage() {
     <main className="page-shell">
       <section className="hero">
         <div className="hero-copy">
-          <span className="eyebrow">FreshMind · Supabase slice</span>
-          <h1>The mockups are now wired to a real fridge and shopping flow.</h1>
+          <span className="eyebrow">FreshMind · Firebase slice</span>
+          <h1>The mockups are wired to a real fridge and shopping flow.</h1>
           <p>
             This pass keeps the visual shell, but the Home, Fridge, and Shopping screens now
-            share real data when Supabase is configured. Without env vars, the app falls back to
+            share live Firestore data when Firebase is configured. Without env vars, the app falls back to
             demo data so the product loop stays visible.
           </p>
         </div>
         <div className="hero-pills">
           <span>Vercel Hobby</span>
-          <span>Supabase</span>
+          <span>Firebase</span>
           <span>Groq</span>
           <span>Pexels</span>
           <span>{data.mode === "live" ? "Live data" : data.mode === "demo" ? "Demo data" : "Setup needed"}</span>
@@ -432,7 +432,7 @@ export default async function HomePage() {
           <BottomNav />
         </PhoneFrame>
 
-        <PhoneFrame eyebrow="03 · Scan" title="Ready for Supabase Storage">
+        <PhoneFrame eyebrow="03 · Scan" title="Ready for web image search">
           <div className="screen-body">
             <header className="screen-header">
               <div>
@@ -450,7 +450,7 @@ export default async function HomePage() {
                 <div className="scan-packaging">
                   <span>Next step</span>
                   <strong>Photo upload</strong>
-                  <em>Use Supabase Storage for package images</em>
+                  <em>Use photo detection, then discard uploads</em>
                 </div>
               </div>
               <div className="scan-actions">
@@ -471,9 +471,9 @@ export default async function HomePage() {
                 <span className="confidence-pill">Coming next</span>
               </div>
               <div className="notes-stack">
-                <p>1. Upload image to a `product-scans` bucket.</p>
-                <p>2. Save image path in a scans table.</p>
-                <p>3. Send the path and OCR result into Groq for extraction.</p>
+                <p>1. Process image input only for detection.</p>
+                <p>2. Save confirmed food fields in Firestore.</p>
+                <p>3. Use free web image search for recipe pictures.</p>
               </div>
             </section>
           </div>
