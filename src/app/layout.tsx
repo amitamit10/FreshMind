@@ -6,6 +6,7 @@ import "@fontsource/manrope/500.css";
 import "@fontsource/manrope/600.css";
 import "@fontsource/manrope/700.css";
 import "./globals.css";
+import { AuthBridge } from "@/app/auth-bridge";
 
 export const metadata: Metadata = {
   title: "FreshMind",
@@ -19,7 +20,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <AuthBridge />
+        {children}
+      </body>
     </html>
   );
 }

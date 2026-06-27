@@ -1,5 +1,7 @@
 import "server-only";
 
+import { cookies } from "next/headers";
+
 import type { FoodItem, FoodStatus, ShoppingItem, StorageLocation } from "@/lib/freshmind-data";
 
 type FirestoreValue =
@@ -24,10 +26,17 @@ type FirebaseTokenResponse = {
   };
 };
 
+type FirebaseAuthContext = {
+  idToken: string;
+  uid: string;
+  source: "browser" | "demo";
+};
+
 const DEMO_UID = process.env.FIREBASE_DEMO_UID;
 const FIREBASE_API_KEY = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
 const FIREBASE_PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
 const FIREBASE_REFRESH_TOKEN = process.env.FIREBASE_DEMO_REFRESH_TOKEN;
+const FIREBASE_SESSION_COOKIE = "freshmind_firebase_id_token";
 
 const demoFoodItems: FoodItem[] = [
   {
@@ -80,7 +89,11 @@ const demoShoppingItems: ShoppingItem[] = [
 ];
 
 function hasFirebaseServerEnv() {
-  return Boolean(DEMO_UID && FIREBASE_API_KEY && FIREBASE_PROJECT_ID && FIREBASE_REFRESH_TOKEN);
+  return Boolean(FIREBASE_API_KEY && FIREBASE_PROJECT_ID);
+}
+
+function hasDemoUserEnv() {
+  return Boolean(DEMO_UID && FIREBASE_API_KEY && FIREBASE_REFRESH_TOKEN);
 }
 
 function getDocumentId(name: string) {
@@ -113,10 +126,31 @@ function toFirestoreFields(data: Record<string, string | boolean | null>) {
   ) as Record<string, FirestoreValue>;
 }
 
-async function getFirebaseIdToken() {
-  if (!hasFirebaseServerEnv()) {
-    throw new Error("Missing Firebase server environment variables.");
+function parseFirebaseToken(idToken: string) {
+  const [, payload] = idToken.split(".");
+  if (!payload) return null;
+
+  try {
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const decoded = JSON.parse(Buffer.from(normalized, "base64").toString("utf8")) as {
+      exp?: number;
+      sub?: string;
+      user_id?: string;
+    };
+    const uid = decoded.user_id ?? decoded.sub;
+
+    if (!uid || !decoded.exp || decoded.exp * 1000 < Date.now() + 60_000) {
+      return null;
+    }
+
+    return { uid };
+  } catch {
+    return null;
   }
+}
+
+async function getDemoAuthContext(): Promise<FirebaseAuthContext | null> {
+  if (!hasDemoUserEnv()) return null;
 
   const response = await fetch(
     `https://securetoken.googleapis.com/v1/token?key=${FIREBASE_API_KEY}`,
@@ -133,24 +167,47 @@ async function getFirebaseIdToken() {
   const payload = (await response.json()) as FirebaseTokenResponse;
 
   if (!response.ok || !payload.id_token) {
-    throw new Error(payload.error?.message ?? "Unable to refresh Firebase ID token.");
+    throw new Error(payload.error?.message ?? "Unable to refresh Firebase demo ID token.");
   }
 
   if (payload.user_id && payload.user_id !== DEMO_UID) {
     throw new Error("Firebase demo user does not match FIREBASE_DEMO_UID.");
   }
 
-  return payload.id_token;
+  return {
+    idToken: payload.id_token,
+    uid: DEMO_UID!,
+    source: "demo",
+  };
 }
 
-async function firestoreFetch(path: string, init: RequestInit = {}) {
-  const idToken = await getFirebaseIdToken();
+async function getFirebaseAuthContext() {
+  if (!hasFirebaseServerEnv()) {
+    throw new Error("Missing Firebase server environment variables.");
+  }
+
+  const cookieStore = await cookies();
+  const browserIdToken = cookieStore.get(FIREBASE_SESSION_COOKIE)?.value;
+  const browserToken = browserIdToken ? parseFirebaseToken(browserIdToken) : null;
+
+  if (browserIdToken && browserToken) {
+    return {
+      idToken: browserIdToken,
+      uid: browserToken.uid,
+      source: "browser" as const,
+    };
+  }
+
+  return getDemoAuthContext();
+}
+
+async function firestoreFetch(auth: FirebaseAuthContext, path: string, init: RequestInit = {}) {
   const response = await fetch(
     `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/${path}`,
     {
       ...init,
       headers: {
-        Authorization: `Bearer ${idToken}`,
+        Authorization: `Bearer ${auth.idToken}`,
         "Content-Type": "application/json",
         ...init.headers,
       },
@@ -166,36 +223,37 @@ async function firestoreFetch(path: string, init: RequestInit = {}) {
   return response;
 }
 
-async function listCollection(collection: "foodItems" | "shoppingItems") {
-  const response = await firestoreFetch(`users/${DEMO_UID}/${collection}?pageSize=100`);
+async function listCollection(auth: FirebaseAuthContext, collection: "foodItems" | "shoppingItems") {
+  const response = await firestoreFetch(auth, `users/${auth.uid}/${collection}?pageSize=100`);
   return (await response.json()) as FirestoreListResponse;
 }
 
 async function createDocument(
+  auth: FirebaseAuthContext,
   collection: "foodItems" | "shoppingItems",
   data: Record<string, string | boolean | null>,
   documentId?: string,
 ) {
   const suffix = documentId ? `?documentId=${encodeURIComponent(documentId)}` : "";
-  await firestoreFetch(`users/${DEMO_UID}/${collection}${suffix}`, {
+  await firestoreFetch(auth, `users/${auth.uid}/${collection}${suffix}`, {
     method: "POST",
     body: JSON.stringify({ fields: toFirestoreFields(data) }),
   });
 }
 
-async function deleteDocument(collection: "foodItems" | "shoppingItems", id: string) {
+async function deleteDocument(auth: FirebaseAuthContext, collection: "foodItems" | "shoppingItems", id: string) {
   if (!id) return;
-  await firestoreFetch(`users/${DEMO_UID}/${collection}/${encodeURIComponent(id)}`, {
+  await firestoreFetch(auth, `users/${auth.uid}/${collection}/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
 }
 
-export async function seedFreshMindDataIfNeeded() {
+export async function seedFreshMindDataIfNeeded(auth: FirebaseAuthContext) {
   if (!hasFirebaseServerEnv()) return;
 
   const [foodItems, shoppingItems] = await Promise.all([
-    listCollection("foodItems"),
-    listCollection("shoppingItems"),
+    listCollection(auth, "foodItems"),
+    listCollection(auth, "shoppingItems"),
   ]);
 
   await Promise.all([
@@ -203,6 +261,7 @@ export async function seedFreshMindDataIfNeeded() {
       ? []
       : demoFoodItems.map((item) =>
           createDocument(
+            auth,
             "foodItems",
             {
               name: item.name,
@@ -220,6 +279,7 @@ export async function seedFreshMindDataIfNeeded() {
       ? []
       : demoShoppingItems.map((item) =>
           createDocument(
+            auth,
             "shoppingItems",
             {
               name: item.name,
@@ -243,17 +303,31 @@ export async function getFirebaseFreshMindData() {
     };
   }
 
-  await seedFreshMindDataIfNeeded();
+  const auth = await getFirebaseAuthContext();
+  if (!auth) {
+    return {
+      mode: "demo" as const,
+      message: "Running on demo data until Firebase Auth starts in this browser.",
+      householdName: "FreshMind Demo Home",
+      items: demoFoodItems,
+      shoppingItems: demoShoppingItems,
+    };
+  }
+
+  await seedFreshMindDataIfNeeded(auth);
 
   const [foodItems, shoppingItems] = await Promise.all([
-    listCollection("foodItems"),
-    listCollection("shoppingItems"),
+    listCollection(auth, "foodItems"),
+    listCollection(auth, "shoppingItems"),
   ]);
 
   return {
     mode: "live" as const,
-    message: "Connected to Firebase Firestore live data.",
-    householdName: "FreshMind Firebase Home",
+    message:
+      auth.source === "browser"
+        ? "Connected to your Firebase anonymous workspace."
+        : "Connected to Firebase Firestore demo data.",
+    householdName: auth.source === "browser" ? "My FreshMind Kitchen" : "FreshMind Firebase Home",
     items:
       foodItems.documents?.map((doc) => ({
         id: getDocumentId(doc.name),
@@ -282,9 +356,10 @@ export async function addFirebaseFoodItem(data: {
   storageLocation: string;
   expiryDate: string | null;
 }) {
-  if (!hasFirebaseServerEnv()) return;
+  const auth = await getFirebaseAuthContext();
+  if (!auth) return;
 
-  await createDocument("foodItems", {
+  await createDocument(auth, "foodItems", {
     name: data.name,
     category: data.category,
     quantityLabel: data.quantityLabel,
@@ -296,10 +371,12 @@ export async function addFirebaseFoodItem(data: {
 }
 
 export async function updateFirebaseFoodStatus(id: string, status: string) {
-  if (!hasFirebaseServerEnv()) return;
+  const auth = await getFirebaseAuthContext();
+  if (!auth) return;
 
   await firestoreFetch(
-    `users/${DEMO_UID}/foodItems/${id}?updateMask.fieldPaths=status`,
+    auth,
+    `users/${auth.uid}/foodItems/${id}?updateMask.fieldPaths=status`,
     {
       method: "PATCH",
       body: JSON.stringify({
@@ -310,15 +387,17 @@ export async function updateFirebaseFoodStatus(id: string, status: string) {
 }
 
 export async function deleteFirebaseFoodItem(id: string) {
-  if (!hasFirebaseServerEnv()) return;
+  const auth = await getFirebaseAuthContext();
+  if (!auth) return;
 
-  await deleteDocument("foodItems", id);
+  await deleteDocument(auth, "foodItems", id);
 }
 
 export async function addFirebaseShoppingItem(data: { name: string; note: string }) {
-  if (!hasFirebaseServerEnv()) return;
+  const auth = await getFirebaseAuthContext();
+  if (!auth) return;
 
-  await createDocument("shoppingItems", {
+  await createDocument(auth, "shoppingItems", {
     name: data.name,
     note: data.note,
     completed: false,
@@ -326,10 +405,12 @@ export async function addFirebaseShoppingItem(data: { name: string; note: string
 }
 
 export async function updateFirebaseShoppingItem(id: string, completed: boolean) {
-  if (!hasFirebaseServerEnv()) return;
+  const auth = await getFirebaseAuthContext();
+  if (!auth) return;
 
   await firestoreFetch(
-    `users/${DEMO_UID}/shoppingItems/${id}?updateMask.fieldPaths=completed`,
+    auth,
+    `users/${auth.uid}/shoppingItems/${id}?updateMask.fieldPaths=completed`,
     {
       method: "PATCH",
       body: JSON.stringify({
@@ -340,7 +421,8 @@ export async function updateFirebaseShoppingItem(id: string, completed: boolean)
 }
 
 export async function deleteFirebaseShoppingItem(id: string) {
-  if (!hasFirebaseServerEnv()) return;
+  const auth = await getFirebaseAuthContext();
+  if (!auth) return;
 
-  await deleteDocument("shoppingItems", id);
+  await deleteDocument(auth, "shoppingItems", id);
 }

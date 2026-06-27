@@ -277,8 +277,8 @@ export default async function HomePage() {
           <span className="eyebrow">FreshMind · Live Firebase app</span>
           <h1>Save food before it becomes waste.</h1>
           <p>
-            Track what is at home, rescue expiring food with recipe suggestions, and keep a shared
-            shopping list synced through Firestore.
+            Track what is at home, rescue expiring food with recipe suggestions, and keep a
+            browser-private kitchen synced through Firebase.
           </p>
         </div>
         <div className="hero-card app-hero-card">
