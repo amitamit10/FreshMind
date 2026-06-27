@@ -183,6 +183,13 @@ async function createDocument(
   });
 }
 
+async function deleteDocument(collection: "foodItems" | "shoppingItems", id: string) {
+  if (!id) return;
+  await firestoreFetch(`users/${DEMO_UID}/${collection}/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}
+
 export async function seedFreshMindDataIfNeeded() {
   if (!hasFirebaseServerEnv()) return;
 
@@ -302,6 +309,12 @@ export async function updateFirebaseFoodStatus(id: string, status: string) {
   );
 }
 
+export async function deleteFirebaseFoodItem(id: string) {
+  if (!hasFirebaseServerEnv()) return;
+
+  await deleteDocument("foodItems", id);
+}
+
 export async function addFirebaseShoppingItem(data: { name: string; note: string }) {
   if (!hasFirebaseServerEnv()) return;
 
@@ -324,4 +337,10 @@ export async function updateFirebaseShoppingItem(id: string, completed: boolean)
       }),
     },
   );
+}
+
+export async function deleteFirebaseShoppingItem(id: string) {
+  if (!hasFirebaseServerEnv()) return;
+
+  await deleteDocument("shoppingItems", id);
 }

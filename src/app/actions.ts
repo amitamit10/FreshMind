@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache";
 import {
   addFirebaseFoodItem,
   addFirebaseShoppingItem,
+  deleteFirebaseFoodItem,
+  deleteFirebaseShoppingItem,
   updateFirebaseFoodStatus,
   updateFirebaseShoppingItem,
 } from "@/lib/firebase/server";
@@ -37,6 +39,18 @@ export async function toggleFoodStatus(formData: FormData) {
   }
 
   await updateFirebaseFoodStatus(id, nextStatus);
+  revalidatePath("/");
+}
+
+export async function deleteFoodItem(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+
+  if (!id) {
+    revalidatePath("/");
+    return;
+  }
+
+  await deleteFirebaseFoodItem(id);
   revalidatePath("/");
 }
 
@@ -84,5 +98,17 @@ export async function toggleShoppingItem(formData: FormData) {
   }
 
   await updateFirebaseShoppingItem(id, !completed);
+  revalidatePath("/");
+}
+
+export async function deleteShoppingItem(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+
+  if (!id) {
+    revalidatePath("/");
+    return;
+  }
+
+  await deleteFirebaseShoppingItem(id);
   revalidatePath("/");
 }

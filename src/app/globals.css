@@ -711,6 +711,10 @@ select {
   font-weight: 700;
 }
 
+.inline-action.danger {
+  color: var(--tomato-strong);
+}
+
 .scan-preview {
   display: grid;
   gap: 14px;
@@ -830,11 +834,16 @@ select {
 }
 
 .shopping-row {
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto 1fr auto;
   width: 100%;
   padding: 10px 0;
   border-bottom: 1px solid rgba(129, 94, 58, 0.08);
   text-align: left;
+}
+
+.shopping-remove {
+  align-self: center;
+  margin-top: 0;
 }
 
 .shopping-row:last-child {
@@ -955,5 +964,14 @@ select {
   .hint-card {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .shopping-row {
+    grid-template-columns: auto 1fr;
+  }
+
+  .shopping-remove {
+    grid-column: 2;
+    justify-self: start;
   }
 }

@@ -20,6 +20,8 @@ import {
   addFoodItem,
   addRecipeMissingItems,
   addShoppingItem,
+  deleteFoodItem,
+  deleteShoppingItem,
   toggleFoodStatus,
   toggleShoppingItem,
 } from "@/app/actions";
@@ -150,6 +152,12 @@ function ProductRow({ item, compact = false }: ProductRowProps) {
           <input type="hidden" name="nextStatus" value={nextStatus} />
           <button className="inline-action" type="submit">
             {item.status === "active" ? "Mark used" : "Restore"}
+          </button>
+        </form>
+        <form action={deleteFoodItem}>
+          <input type="hidden" name="id" value={item.id} />
+          <button className="inline-action danger" type="submit">
+            Remove
           </button>
         </form>
       </div>
@@ -500,6 +508,9 @@ export default async function HomePage() {
                     <strong>{item.name}</strong>
                     <p>{item.note}</p>
                   </div>
+                  <button className="inline-action danger shopping-remove" formAction={deleteShoppingItem}>
+                    Remove
+                  </button>
                 </form>
               ))}
               {shoppingItems.length === 0 ? (
