@@ -3,7 +3,9 @@ import {
   BellRing,
   Camera,
   ChefHat,
-  Clock3,  Home,
+  Clock3,
+  Database,
+  Home,
   Plus,
   ReceiptText,
   Refrigerator,
@@ -14,6 +16,21 @@ import {
   Upload,
 } from "lucide-react";
 
+import {
+  addFoodItem,
+  addShoppingItem,
+  toggleFoodStatus,
+  toggleShoppingItem,
+} from "@/app/actions";
+import {
+  type ExpiryStatus,
+  type FoodItem,
+  formatExpiryCopy,
+  getExpiryStatus,
+  getFreshMindData,
+  type ShoppingItem,
+} from "@/lib/freshmind-data";
+
 type StatCardProps = {
   label: string;
   value: string;
@@ -21,10 +38,8 @@ type StatCardProps = {
 };
 
 type ProductRowProps = {
-  name: string;
-  meta: string;
-  quantity: string;
-  status: "Urgent" | "Soon" | "Safe";
+  item: FoodItem;
+  compact?: boolean;
 };
 
 type RecipeCardProps = {
@@ -44,20 +59,6 @@ const tabs = [
   { label: "Shop", icon: ShoppingCart },
 ];
 
-const urgencyRows: ProductRowProps[] = [
-  { name: "Greek Yogurt", meta: "Dairy · Fridge", quantity: "1 tub", status: "Urgent" },
-  { name: "Tomatoes", meta: "Produce · Counter", quantity: "4 left", status: "Soon" },
-  { name: "Eggs", meta: "Dairy · Fridge", quantity: "8 eggs", status: "Safe" },
-  { name: "Mushrooms", meta: "Produce · Fridge", quantity: "250g", status: "Urgent" },
-];
-
-const shoppingList = [
-  { name: "Garlic", meta: "Missing from pasta rescue", done: false },
-  { name: "Pasta", meta: "Add from recipes", done: false },
-  { name: "Olive oil", meta: "House staple", done: true },
-  { name: "Parsley", meta: "Fresh garnish", done: false },
-];
-
 function toneClass(tone: StatCardProps["tone"] | RecipeCardProps["tone"]) {
   if (tone === "sage") return "tone-sage";
   if (tone === "tomato") return "tone-tomato";
@@ -65,10 +66,56 @@ function toneClass(tone: StatCardProps["tone"] | RecipeCardProps["tone"]) {
   return "tone-berry";
 }
 
-function statusClass(status: ProductRowProps["status"]) {
+function statusClass(status: ExpiryStatus) {
   if (status === "Urgent") return "status status-urgent";
   if (status === "Soon") return "status status-soon";
   return "status status-safe";
+}
+
+function buildRescueMeal(items: FoodItem[]) {
+  const activeItems = items.filter((item) => item.status === "active");
+  const urgentItems = activeItems.filter((item) => getExpiryStatus(item.expiryDate) === "Urgent");
+  const focus = urgentItems.length > 0 ? urgentItems : activeItems;
+  const top = focus.slice(0, 3);
+
+  if (top.length === 0) {
+    return {
+      title: "Kitchen reset",
+      subtitle: "Start by adding what is already in the fridge.",
+      uses: [] as string[],
+      missing: ["Your first few items"],
+      time: "8 min",
+    };
+  }
+
+  const names = top.map((item) => item.name);
+  const title = top.some((item) => item.category.toLowerCase().includes("dairy"))
+    ? "Creamy fridge rescue bowl"
+    : "Fast pantry rescue plate";
+
+  return {
+    title,
+    subtitle: `Built from ${names.slice(0, 2).join(" and ")} before they expire.`,
+    uses: names,
+    missing: ["Salt", "Olive oil"],
+    time: `${12 + top.length * 4} min`,
+  };
+}
+
+function deriveStats(items: FoodItem[], shoppingItems: ShoppingItem[]) {
+  const activeItems = items.filter((item) => item.status === "active");
+  const urgentCount = activeItems.filter(
+    (item) => getExpiryStatus(item.expiryDate) === "Urgent",
+  ).length;
+  const usedCount = items.filter((item) => item.status === "used" || item.status === "finished").length;
+  const savedEstimate = usedCount * 18 + activeItems.length * 6;
+  const score = Math.max(62, 96 - urgentCount * 4 - shoppingItems.filter((item) => !item.completed).length);
+
+  return {
+    urgentCount,
+    savedEstimate,
+    score,
+  };
 }
 
 function StatCard({ label, value, tone }: StatCardProps) {
@@ -80,17 +127,30 @@ function StatCard({ label, value, tone }: StatCardProps) {
   );
 }
 
-function ProductRow({ name, meta, quantity, status }: ProductRowProps) {
+function ProductRow({ item, compact = false }: ProductRowProps) {
+  const urgency = getExpiryStatus(item.expiryDate);
+  const nextStatus = item.status === "active" ? "used" : "active";
+
   return (
-    <div className="product-row">
+    <div className={compact ? "product-row compact" : "product-row"}>
       <div className="product-art" aria-hidden="true" />
       <div className="product-copy">
-        <strong>{name}</strong>
-        <span>{meta}</span>
+        <strong>{item.name}</strong>
+        <span>
+          {item.category} · {item.storageLocation}
+        </span>
+        <small>{formatExpiryCopy(item.expiryDate)}</small>
       </div>
       <div className="product-meta">
-        <em>{quantity}</em>
-        <span className={statusClass(status)}>{status}</span>
+        <em>{item.quantityLabel}</em>
+        <span className={statusClass(urgency)}>{urgency}</span>
+        <form action={toggleFoodStatus}>
+          <input type="hidden" name="id" value={item.id} />
+          <input type="hidden" name="nextStatus" value={nextStatus} />
+          <button className="inline-action" type="submit">
+            {item.status === "active" ? "Mark used" : "Restore"}
+          </button>
+        </form>
       </div>
     </div>
   );
@@ -112,7 +172,7 @@ function RecipeCard({ title, subtitle, uses, missing, time, tone }: RecipeCardPr
           </span>
         </div>
         <p className="recipe-line">
-          Uses: <strong>{uses.join(", ")}</strong>
+          Uses: <strong>{uses.length > 0 ? uses.join(", ") : "No items yet"}</strong>
         </p>
         <p className="recipe-line">
           Missing: <strong>{missing.join(", ")}</strong>
@@ -164,17 +224,53 @@ function BottomNav() {
   );
 }
 
-export default function HomePage() {
+export default async function HomePage() {
+  const data = await getFreshMindData();
+  const activeItems = data.items.filter((item) => item.status === "active");
+  const shoppingItems = data.shoppingItems;
+  const rescue = buildRescueMeal(activeItems);
+  const stats = deriveStats(data.items, shoppingItems);
+  const incompleteShopping = shoppingItems.filter((item) => !item.completed);
+  const recipeCards = [
+    {
+      title: rescue.title,
+      subtitle: rescue.subtitle,
+      uses: rescue.uses,
+      missing: rescue.missing,
+      time: rescue.time,
+      tone: "sage" as const,
+    },
+    {
+      title: "Almost-ready skillet",
+      subtitle: "A fallback when you only want one-pan cooking.",
+      uses: activeItems.slice(0, 2).map((item) => item.name),
+      missing: ["Eggs", "Bread"],
+      time: "14 min",
+      tone: "tomato" as const,
+    },
+    {
+      title: "Save-before-expiring plate",
+      subtitle: "Uses the quickest-to-expire items first.",
+      uses: activeItems
+        .filter((item) => getExpiryStatus(item.expiryDate) !== "Safe")
+        .slice(0, 3)
+        .map((item) => item.name),
+      missing: ["Lemon", "Herbs"],
+      time: "11 min",
+      tone: "berry" as const,
+    },
+  ];
+
   return (
     <main className="page-shell">
       <section className="hero">
         <div className="hero-copy">
-          <span className="eyebrow">FreshMind · Free-stack prototype</span>
-          <h1>Five mobile product screens turned into the first working app shell.</h1>
+          <span className="eyebrow">FreshMind · Supabase slice</span>
+          <h1>The mockups are now wired to a real fridge and shopping flow.</h1>
           <p>
-            The UI is built around a real free-first stack: Supabase for data, Groq for AI,
-            and Pexels for recipe imagery. This pass focuses on the product loop before wiring
-            live services.
+            This pass keeps the visual shell, but the Home, Fridge, and Shopping screens now
+            share real data when Supabase is configured. Without env vars, the app falls back to
+            demo data so the product loop stays visible.
           </p>
         </div>
         <div className="hero-pills">
@@ -182,15 +278,20 @@ export default function HomePage() {
           <span>Supabase</span>
           <span>Groq</span>
           <span>Pexels</span>
+          <span>{data.mode === "live" ? "Live data" : data.mode === "demo" ? "Demo data" : "Setup needed"}</span>
         </div>
+        <section className={data.mode === "error" ? "system-banner error" : "system-banner"}>
+          <Database size={16} />
+          <span>{data.message}</span>
+        </section>
       </section>
 
       <section className="screen-grid">
-        <PhoneFrame eyebrow="01 · Home" title="Rescue tonight’s dinner">
+        <PhoneFrame eyebrow="01 · Home" title={data.householdName}>
           <div className="screen-body">
             <header className="screen-header">
               <div>
-                <span className="screen-kicker">Thursday dinner</span>
+                <span className="screen-kicker">Household overview</span>
                 <h2>Good evening, Amit</h2>
               </div>
               <button className="icon-chip" aria-label="Alerts">
@@ -200,48 +301,58 @@ export default function HomePage() {
 
             <section className="hero-card">
               <div>
-                <span className="card-tag tone-tomato">2 items urgent</span>
-                <h3>Creamy Mushroom Pasta</h3>
-                <p>Uses mushrooms, yogurt, and parsley before tomorrow night.</p>
+                <span className="card-tag tone-tomato">{stats.urgentCount} items urgent</span>
+                <h3>{rescue.title}</h3>
+                <p>{rescue.subtitle}</p>
               </div>
               <div className="hero-meta">
                 <span>
                   <ChefHat size={14} />
-                  22 min
+                  {rescue.time}
                 </span>
                 <span>
                   <ShoppingCart size={14} />
-                  2 missing
+                  {rescue.missing.length} missing
                 </span>
               </div>
             </section>
 
             <div className="stat-row">
-              <StatCard label="Waste score" value="92/100" tone="sage" />
-              <StatCard label="Saved this week" value="₪148" tone="butter" />
-              <StatCard label="Need rescue" value="4 items" tone="tomato" />
+              <StatCard label="Waste score" value={`${stats.score}/100`} tone="sage" />
+              <StatCard label="Saved estimate" value={`₪${stats.savedEstimate}`} tone="butter" />
+              <StatCard label="Need rescue" value={`${stats.urgentCount} items`} tone="tomato" />
             </div>
 
             <section className="panel">
               <div className="panel-heading">
                 <h3>Expiring soon</h3>
-                <button className="text-action">See all</button>
+                <button className="text-action">Synced view</button>
               </div>
               <div className="stack">
-                {urgencyRows.slice(0, 3).map((row) => (
-                  <ProductRow key={row.name} {...row} />
+                {activeItems.slice(0, 3).map((item) => (
+                  <ProductRow key={item.id} item={item} compact />
                 ))}
+                {activeItems.length === 0 ? (
+                  <div className="empty-card">
+                    <strong>No items yet</strong>
+                    <p>Add your first fridge items below and they will show up here.</p>
+                  </div>
+                ) : null}
               </div>
             </section>
 
             <section className="mini-banner">
               <div>
                 <strong>Shopping nudge</strong>
-                <p>Pasta and garlic are missing from tonight’s rescue meal.</p>
+                <p>
+                  {incompleteShopping.length > 0
+                    ? `${incompleteShopping.length} items are still missing for the next meal.`
+                    : "Your shopping list is clear for now."}
+                </p>
               </div>
               <button className="primary-pill">
                 <Plus size={16} />
-                Add both
+                Review list
               </button>
             </section>
           </div>
@@ -274,30 +385,54 @@ export default function HomePage() {
 
             <section className="panel">
               <div className="panel-heading">
+                <h3>Add to fridge</h3>
+                <button className="text-action">Manual add</button>
+              </div>
+              <form action={addFoodItem} className="mini-form">
+                <input name="name" placeholder="Milk, tomatoes, yogurt..." required />
+                <div className="mini-form-grid">
+                  <input name="quantityLabel" placeholder="1 tub" />
+                  <input name="expiryDate" type="date" />
+                </div>
+                <div className="mini-form-grid">
+                  <input name="category" placeholder="Dairy" />
+                  <select name="storageLocation" defaultValue="fridge">
+                    <option value="fridge">Fridge</option>
+                    <option value="freezer">Freezer</option>
+                    <option value="pantry">Pantry</option>
+                    <option value="cabinet">Cabinet</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <button className="primary-pill full-width" type="submit">
+                  <Plus size={16} />
+                  Save item
+                </button>
+              </form>
+            </section>
+
+            <section className="panel">
+              <div className="panel-heading">
                 <h3>This week</h3>
                 <button className="text-action">Grouped view</button>
               </div>
               <div className="stack">
-                {urgencyRows.map((row) => (
-                  <ProductRow key={row.name} {...row} />
+                {activeItems.map((item) => (
+                  <ProductRow key={item.id} item={item} />
                 ))}
-              </div>
-            </section>
-
-            <section className="hint-card">
-              <div className="hint-icon">
-                <Sparkles size={16} />
-              </div>
-              <div>
-                <strong>Duplicate check</strong>
-                <p>You already have Greek Yogurt. Update quantity instead of adding a new item?</p>
+                {activeItems.length === 0 ? (
+                  <div className="empty-card">
+                    <strong>Your fridge is empty</strong>
+                    <p>The first saved item will appear here with expiry priority and actions.</p>
+                  </div>
+                ) : null}
               </div>
             </section>
           </div>
           <BottomNav />
         </PhoneFrame>
 
-        <PhoneFrame eyebrow="03 · Scan" title="Confirm before saving">
+        <PhoneFrame eyebrow="03 · Scan" title="Ready for Supabase Storage">
           <div className="screen-body">
             <header className="screen-header">
               <div>
@@ -311,11 +446,11 @@ export default function HomePage() {
 
             <section className="scan-preview">
               <div className="scan-photo">
-                <div className="scan-tag">Photo preview</div>
+                <div className="scan-tag">Storage-ready</div>
                 <div className="scan-packaging">
-                  <span>YoCream</span>
-                  <strong>Greek Yogurt</strong>
-                  <em>Expires 28/06/2026</em>
+                  <span>Next step</span>
+                  <strong>Photo upload</strong>
+                  <em>Use Supabase Storage for package images</em>
                 </div>
               </div>
               <div className="scan-actions">
@@ -332,43 +467,24 @@ export default function HomePage() {
 
             <section className="panel">
               <div className="panel-heading">
-                <h3>AI detected</h3>
-                <span className="confidence-pill">92% confidence</span>
+                <h3>Implementation note</h3>
+                <span className="confidence-pill">Coming next</span>
               </div>
-              <div className="form-grid">
-                <label>
-                  <span>Product name</span>
-                  <input value="Greek Yogurt" readOnly />
-                </label>
-                <label>
-                  <span>Category</span>
-                  <input value="Dairy" readOnly />
-                </label>
-                <label>
-                  <span>Expiry date</span>
-                  <input value="28/06/2026" readOnly />
-                </label>
-                <label>
-                  <span>Quantity</span>
-                  <input value="1 tub" readOnly />
-                </label>
+              <div className="notes-stack">
+                <p>1. Upload image to a `product-scans` bucket.</p>
+                <p>2. Save image path in a scans table.</p>
+                <p>3. Send the path and OCR result into Groq for extraction.</p>
               </div>
             </section>
-
-            <div className="action-row">
-              <button className="ghost-pill">Scan again</button>
-              <button className="secondary-pill">Edit</button>
-              <button className="primary-pill">Confirm</button>
-            </div>
           </div>
           <BottomNav />
         </PhoneFrame>
 
-        <PhoneFrame eyebrow="04 · Recipes" title="Ranked rescue meals">
+        <PhoneFrame eyebrow="04 · Recipes" title="Rule-based rescue meals">
           <div className="screen-body">
             <header className="screen-header">
               <div>
-                <span className="screen-kicker">AI recipes</span>
+                <span className="screen-kicker">Recipe engine v0</span>
                 <h2>Cook with what we have</h2>
               </div>
               <button className="icon-chip" aria-label="Chef">
@@ -383,30 +499,9 @@ export default function HomePage() {
             </div>
 
             <div className="stack">
-              <RecipeCard
-                title="Creamy Mushroom Pasta"
-                subtitle="Uses mushrooms expiring tomorrow"
-                uses={["Mushrooms", "Greek Yogurt", "Parsley"]}
-                missing={["Pasta", "Garlic"]}
-                time="22 min"
-                tone="sage"
-              />
-              <RecipeCard
-                title="Tomato Egg Skillet"
-                subtitle="No shopping needed"
-                uses={["Tomatoes", "Eggs", "Herbs"]}
-                missing={["None"]}
-                time="14 min"
-                tone="tomato"
-              />
-              <RecipeCard
-                title="Pantry Rescue Toasts"
-                subtitle="Best for one quick dinner"
-                uses={["Tomatoes", "Yogurt"]}
-                missing={["Bread"]}
-                time="9 min"
-                tone="berry"
-              />
+              {recipeCards.map((card) => (
+                <RecipeCard key={card.title} {...card} />
+              ))}
             </div>
           </div>
           <BottomNav />
@@ -427,43 +522,54 @@ export default function HomePage() {
             <section className="mini-banner tone-sage banner-tight">
               <div>
                 <strong>AI suggestion</strong>
-                <p>Add pasta and garlic to unlock the top rescue meal.</p>
+                <p>Add pantry basics that complete the top rescue meal.</p>
               </div>
               <button className="primary-pill">
                 <Sparkles size={16} />
-                Add from recipe
+                Use recipe picks
               </button>
             </section>
 
             <section className="panel">
               <div className="panel-heading">
-                <h3>To buy</h3>
-                <span className="count-pill">4 items</span>
+                <h3>Add to list</h3>
+                <button className="text-action">Shared add</button>
               </div>
-              <div className="shopping-stack">
-                {shoppingList.map((item) => (
-                  <div key={item.name} className={item.done ? "shopping-row done" : "shopping-row"}>
-                    <span className="checkmark" aria-hidden="true">
-                      {item.done ? "✓" : ""}
-                    </span>
-                    <div>
-                      <strong>{item.name}</strong>
-                      <p>{item.meta}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <form action={addShoppingItem} className="mini-form">
+                <input name="name" placeholder="Garlic, pasta, olive oil..." required />
+                <input name="note" placeholder="Why this item is needed" />
+                <button className="primary-pill full-width" type="submit">
+                  <Plus size={16} />
+                  Save shopping item
+                </button>
+              </form>
             </section>
 
             <section className="panel">
               <div className="panel-heading">
-                <h3>Staples running low</h3>
-                <button className="text-action">Auto-add</button>
+                <h3>To buy</h3>
+                <span className="count-pill">{shoppingItems.length} items</span>
               </div>
-              <div className="chip-row">
-                <span className="filter-chip">Eggs</span>
-                <span className="filter-chip">Milk</span>
-                <span className="filter-chip">Olive oil</span>
+              <div className="shopping-stack">
+                {shoppingItems.map((item) => (
+                  <form key={item.id} action={toggleShoppingItem} className={item.completed ? "shopping-row done" : "shopping-row"}>
+                    <input type="hidden" name="id" value={item.id} />
+                    <input type="hidden" name="completed" value={String(item.completed)} />
+                    <button className="checkmark" aria-label={item.completed ? "Mark incomplete" : "Mark complete"} type="submit">
+                      {item.completed ? "✓" : ""}
+                    </button>
+                    <div>
+                      <strong>{item.name}</strong>
+                      <p>{item.note}</p>
+                    </div>
+                  </form>
+                ))}
+                {shoppingItems.length === 0 ? (
+                  <div className="empty-card">
+                    <strong>Shopping list is clear</strong>
+                    <p>Add a missing ingredient and it will show up here instantly.</p>
+                  </div>
+                ) : null}
               </div>
             </section>
           </div>
