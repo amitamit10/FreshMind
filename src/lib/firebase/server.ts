@@ -249,17 +249,23 @@ async function deleteDocument(auth: FirebaseAuthContext, collection: "foodItems"
 }
 
 export async function seedFreshMindDataIfNeeded(auth: FirebaseAuthContext) {
-  if (!hasFirebaseServerEnv()) return;
+  if (!hasFirebaseServerEnv()) {
+    return {
+      seededFoodItems: null,
+      seededShoppingItems: null,
+    };
+  }
 
   const [foodItems, shoppingItems] = await Promise.all([
     listCollection(auth, "foodItems"),
     listCollection(auth, "shoppingItems"),
   ]);
+  const shouldSeedFoodItems = !foodItems.documents?.length;
+  const shouldSeedShoppingItems = !shoppingItems.documents?.length;
 
   await Promise.all([
-    ...(foodItems.documents?.length
-      ? []
-      : demoFoodItems.map((item) =>
+    ...(shouldSeedFoodItems
+      ? demoFoodItems.map((item) =>
           createDocument(
             auth,
             "foodItems",
@@ -274,10 +280,10 @@ export async function seedFreshMindDataIfNeeded(auth: FirebaseAuthContext) {
             },
             item.id,
           ),
-        )),
-    ...(shoppingItems.documents?.length
-      ? []
-      : demoShoppingItems.map((item) =>
+        )
+      : []),
+    ...(shouldSeedShoppingItems
+      ? demoShoppingItems.map((item) =>
           createDocument(
             auth,
             "shoppingItems",
@@ -288,8 +294,14 @@ export async function seedFreshMindDataIfNeeded(auth: FirebaseAuthContext) {
             },
             item.id,
           ),
-        )),
+        )
+      : []),
   ]);
+
+  return {
+    seededFoodItems: shouldSeedFoodItems ? demoFoodItems : null,
+    seededShoppingItems: shouldSeedShoppingItems ? demoShoppingItems : null,
+  };
 }
 
 export async function getFirebaseFreshMindData() {
@@ -314,7 +326,7 @@ export async function getFirebaseFreshMindData() {
     };
   }
 
-  await seedFreshMindDataIfNeeded(auth);
+  const seedResult = await seedFreshMindDataIfNeeded(auth);
 
   const [foodItems, shoppingItems] = await Promise.all([
     listCollection(auth, "foodItems"),
@@ -329,6 +341,7 @@ export async function getFirebaseFreshMindData() {
         : "Connected to Firebase Firestore demo data.",
     householdName: auth.source === "browser" ? "My FreshMind Kitchen" : "FreshMind Firebase Home",
     items:
+      seedResult.seededFoodItems ??
       foodItems.documents?.map((doc) => ({
         id: getDocumentId(doc.name),
         name: stringField(doc.fields, "name", "Food item"),
@@ -338,14 +351,17 @@ export async function getFirebaseFreshMindData() {
         expiryDate: nullableStringField(doc.fields, "expiryDate"),
         status: stringField(doc.fields, "status", "active") as FoodStatus,
         addedBy: stringField(doc.fields, "addedBy", "Household"),
-      })) ?? [],
+      })) ??
+      [],
     shoppingItems:
+      seedResult.seededShoppingItems ??
       shoppingItems.documents?.map((doc) => ({
         id: getDocumentId(doc.name),
         name: stringField(doc.fields, "name", "Shopping item"),
         note: stringField(doc.fields, "note", "House staple"),
         completed: booleanField(doc.fields, "completed"),
-      })) ?? [],
+      })) ??
+      [],
   };
 }
 
